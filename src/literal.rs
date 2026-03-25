@@ -99,7 +99,7 @@ impl Literal {
 
     /// Check if this is a negative literal.
     pub fn is_negative(&self) -> bool {
-        self.0 % 2 == 0
+        self.0.is_multiple_of(2)
     }
 
     /// Get the negation of this literal.

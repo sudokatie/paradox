@@ -8,8 +8,9 @@
 //! - Restarts
 //! - Clause deletion
 
+pub mod propagate;
+
 // Module stubs for later implementation
-// pub mod propagate;
 // pub mod decide;
 // pub mod conflict;
 // pub mod learn;
@@ -139,7 +140,6 @@ impl Solver {
 mod tests {
     use super::*;
     use crate::clause::Clause;
-    use crate::literal::Literal;
 
     #[test]
     fn test_empty_formula_is_sat() {

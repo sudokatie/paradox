@@ -103,6 +103,8 @@ impl WatchLists {
 /// Each clause with 2+ literals watches its first two literals.
 /// Unit clauses watch their single literal.
 /// Empty clauses are not watched.
+///
+/// Watch list semantics: watches[lit] contains clauses to check when lit becomes false.
 pub fn init_watches(formula: &Formula) -> WatchLists {
     let mut watches = WatchLists::new(formula.num_vars());
     
@@ -113,13 +115,13 @@ pub fn init_watches(formula: &Formula) -> WatchLists {
             let lit0 = clause[0];
             let lit1 = clause[1];
             // When lit0 becomes false, check this clause (blocker is lit1)
-            watches.add_watch(lit0.negate(), idx, lit1);
+            watches.add_watch(lit0, idx, lit1);
             // When lit1 becomes false, check this clause (blocker is lit0)
-            watches.add_watch(lit1.negate(), idx, lit0);
+            watches.add_watch(lit1, idx, lit0);
         } else if len == 1 {
             // Unit clause: watch the single literal
             let lit = clause[0];
-            watches.add_watch(lit.negate(), idx, lit);
+            watches.add_watch(lit, idx, lit);
         }
         // Empty clauses are not watched (they represent conflict)
     }
@@ -200,15 +202,16 @@ mod tests {
         
         let w = init_watches(&f);
         
-        // When 1 becomes false (-1), check clause 0
-        assert_eq!(w.watches(lit(-1)).len(), 1);
-        assert_eq!(w.watches(lit(-1))[0].clause, 0);
-        assert_eq!(w.watches(lit(-1))[0].blocker.to_dimacs(), 2);
+        // watches[lit] = clauses to check when lit becomes false
+        // When 1 becomes false, check clause 0
+        assert_eq!(w.watches(lit(1)).len(), 1);
+        assert_eq!(w.watches(lit(1))[0].clause, 0);
+        assert_eq!(w.watches(lit(1))[0].blocker.to_dimacs(), 2);
         
-        // When 2 becomes false (-2), check clause 0
-        assert_eq!(w.watches(lit(-2)).len(), 1);
-        assert_eq!(w.watches(lit(-2))[0].clause, 0);
-        assert_eq!(w.watches(lit(-2))[0].blocker.to_dimacs(), 1);
+        // When 2 becomes false, check clause 0
+        assert_eq!(w.watches(lit(2)).len(), 1);
+        assert_eq!(w.watches(lit(2))[0].clause, 0);
+        assert_eq!(w.watches(lit(2))[0].blocker.to_dimacs(), 1);
     }
 
     #[test]
@@ -219,10 +222,10 @@ mod tests {
         let w = init_watches(&f);
         
         // Only first two literals are watched
-        assert_eq!(w.watches(lit(-1)).len(), 1);
-        assert_eq!(w.watches(lit(-2)).len(), 1);
-        assert_eq!(w.watches(lit(-3)).len(), 0);
-        assert_eq!(w.watches(lit(-4)).len(), 0);
+        assert_eq!(w.watches(lit(1)).len(), 1);
+        assert_eq!(w.watches(lit(2)).len(), 1);
+        assert_eq!(w.watches(lit(3)).len(), 0);
+        assert_eq!(w.watches(lit(4)).len(), 0);
     }
 
     #[test]
@@ -232,24 +235,24 @@ mod tests {
         
         let w = init_watches(&f);
         
-        assert_eq!(w.watches(lit(-1)).len(), 1);
-        assert_eq!(w.watches(lit(-1))[0].clause, 0);
+        assert_eq!(w.watches(lit(1)).len(), 1);
+        assert_eq!(w.watches(lit(1))[0].clause, 0);
     }
 
     #[test]
     fn test_init_watches_multiple() {
         let mut f = Formula::new();
-        f.add_clause(clause(&[1, 2]));     // 0
-        f.add_clause(clause(&[1, 3]));     // 1
-        f.add_clause(clause(&[-1, 2]));    // 2
+        f.add_clause(clause(&[1, 2]));     // 0: watches 1, 2
+        f.add_clause(clause(&[1, 3]));     // 1: watches 1, 3
+        f.add_clause(clause(&[-1, 2]));    // 2: watches -1, 2
         
         let w = init_watches(&f);
         
-        // -1 watches clauses 0 and 1
-        assert_eq!(w.watches(lit(-1)).len(), 2);
-        // 1 watches clause 2
-        assert_eq!(w.watches(lit(1)).len(), 1);
-        assert_eq!(w.watches(lit(1))[0].clause, 2);
+        // 1 watches clauses 0 and 1
+        assert_eq!(w.watches(lit(1)).len(), 2);
+        // -1 watches clause 2
+        assert_eq!(w.watches(lit(-1)).len(), 1);
+        assert_eq!(w.watches(lit(-1))[0].clause, 2);
     }
 
     #[test]

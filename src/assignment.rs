@@ -23,11 +23,7 @@ impl Value {
 
     /// Check if this value satisfies a literal.
     pub fn satisfies(self, positive: bool) -> bool {
-        match (self, positive) {
-            (Value::True, true) => true,
-            (Value::False, false) => true,
-            _ => false,
-        }
+        matches!((self, positive), (Value::True, true) | (Value::False, false))
     }
 
     /// Check if assigned (True or False).
