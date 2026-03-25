@@ -8,11 +8,13 @@
 //! - Arrays
 
 pub mod euf;
+pub mod lia;
 
 use crate::literal::Literal;
 use std::fmt;
 
 pub use euf::EufSolver;
+pub use lia::LiaSolver;
 
 /// Result of theory operations
 pub type TheoryResult<T> = Result<T, TheoryConflict>;
