@@ -1,8 +1,10 @@
 //! SAT solver implementation
 
+mod conflict;
 mod propagate;
 mod vsids;
 
+pub use conflict::{analyze_conflict, ConflictResult};
 pub use propagate::propagate;
 pub use vsids::Vsids;
 

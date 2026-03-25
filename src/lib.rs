@@ -21,7 +21,7 @@ pub use assignment::{Assignments, AssignmentInfo, Value};
 pub use trail::Trail;
 pub use watch::{WatchLists, Watcher, init_watches};
 pub use parser::{parse_dimacs, DimacsError};
-pub use solver::{Solver, SolveResult, propagate};
+pub use solver::{Solver, SolveResult, propagate, analyze_conflict, ConflictResult};
 
 #[cfg(test)]
 mod tests {
