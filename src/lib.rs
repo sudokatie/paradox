@@ -9,11 +9,13 @@ pub mod literal;
 pub mod clause;
 pub mod formula;
 pub mod assignment;
+pub mod trail;
 
 pub use literal::{Literal, Variable};
 pub use clause::{Clause, ClauseRef};
 pub use formula::Formula;
 pub use assignment::{Assignments, AssignmentInfo, Value};
+pub use trail::Trail;
 
 #[cfg(test)]
 mod tests {
