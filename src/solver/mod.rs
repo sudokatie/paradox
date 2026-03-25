@@ -3,11 +3,13 @@
 mod conflict;
 mod learn;
 mod propagate;
+mod restart;
 mod vsids;
 
 pub use conflict::{analyze_conflict, ConflictResult};
 pub use learn::{add_learned_clause, bump_conflict_vars, LearningStats};
 pub use propagate::propagate;
+pub use restart::{RestartScheduler, RestartStrategy, luby_value};
 pub use vsids::Vsids;
 
 use crate::assignment::{Assignments, Value};
