@@ -10,12 +10,14 @@ pub mod clause;
 pub mod formula;
 pub mod assignment;
 pub mod trail;
+pub mod watch;
 
 pub use literal::{Literal, Variable};
 pub use clause::{Clause, ClauseRef};
 pub use formula::Formula;
 pub use assignment::{Assignments, AssignmentInfo, Value};
 pub use trail::Trail;
+pub use watch::{WatchLists, Watcher, init_watches};
 
 #[cfg(test)]
 mod tests {
