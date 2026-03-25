@@ -1,7 +1,6 @@
 //! CNF formula representation
 
 use crate::clause::{Clause, ClauseRef};
-use crate::literal::Variable;
 
 /// A CNF formula is a conjunction of clauses
 #[derive(Debug)]

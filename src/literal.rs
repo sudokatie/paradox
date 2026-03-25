@@ -75,7 +75,7 @@ impl Literal {
 
     /// Check if this is a positive literal
     pub fn is_positive(&self) -> bool {
-        self.code % 2 == 0
+        self.code.is_multiple_of(2)
     }
 
     /// Check if this is a negative literal

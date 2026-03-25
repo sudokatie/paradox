@@ -42,7 +42,7 @@ pub fn propagate(
             let lits = clause.literals();
             
             // Find the two watched literals
-            let (watch0, watch1) = if lits[0] == false_lit {
+            let (_watch0, watch1) = if lits[0] == false_lit {
                 (0, 1)
             } else {
                 debug_assert!(lits.len() > 1 && lits[1] == false_lit);

@@ -6,7 +6,6 @@
 
 use crate::clause::{Clause, ClauseRef};
 use crate::formula::Formula;
-use crate::literal::Literal;
 use crate::watch::WatchLists;
 
 /// Configuration for clause reduction
@@ -170,7 +169,7 @@ pub fn compact_clauses(
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::literal::Variable;
+    use crate::literal::{Literal, Variable};
 
     fn lit(i: i32) -> Literal {
         Literal::from_dimacs(i)

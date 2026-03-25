@@ -153,15 +153,13 @@ impl RestartScheduler {
 /// Compute the i-th value of the Luby sequence (1-indexed)
 /// Luby sequence: 1, 1, 2, 1, 1, 2, 4, 1, 1, 2, 1, 1, 2, 4, 8, ...
 pub fn luby_value(i: u64) -> u64 {
-    // Find k such that 2^k - 1 < i <= 2^(k+1) - 1
-    let mut k = 0u32;
+    // Find smallest power of 2 greater than i
     let mut pow = 1u64;
     while pow < i + 1 {
-        k += 1;
         pow *= 2;
     }
     
-    // pow = 2^k
+    // pow = 2^k where k is smallest such that 2^k > i
     // If i == 2^k - 1, return 2^(k-1)
     if i == pow - 1 {
         return pow / 2;

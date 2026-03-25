@@ -134,14 +134,14 @@ impl Solver {
     /// Run unit propagation
     /// Returns Some(clause_ref) if conflict, None otherwise
     pub fn propagate(&mut self) -> Option<ClauseRef> {
-        let result = propagate(
+        
+        propagate(
             &self.formula,
             &mut self.assignments,
             &mut self.trail,
             &mut self.watches,
             &mut self.stats.propagations,
-        );
-        result
+        )
     }
 
     /// Make a decision on an unassigned variable
