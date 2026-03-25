@@ -7,9 +7,13 @@
 
 pub mod literal;
 pub mod clause;
+pub mod formula;
+pub mod assignment;
 
 pub use literal::{Literal, Variable};
 pub use clause::{Clause, ClauseRef};
+pub use formula::Formula;
+pub use assignment::{Assignments, AssignmentInfo, Value};
 
 #[cfg(test)]
 mod tests {
