@@ -7,8 +7,12 @@
 //! - BV (Bitvectors)
 //! - Arrays
 
+pub mod euf;
+
 use crate::literal::Literal;
 use std::fmt;
+
+pub use euf::EufSolver;
 
 /// Result of theory operations
 pub type TheoryResult<T> = Result<T, TheoryConflict>;
