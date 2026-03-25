@@ -9,12 +9,14 @@
 
 pub mod euf;
 pub mod lia;
+pub mod bv;
 
 use crate::literal::Literal;
 use std::fmt;
 
 pub use euf::EufSolver;
 pub use lia::LiaSolver;
+pub use bv::BvSolver;
 
 /// Result of theory operations
 pub type TheoryResult<T> = Result<T, TheoryConflict>;
