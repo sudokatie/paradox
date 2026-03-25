@@ -1,0 +1,7 @@
+c Simple satisfiable example
+c x1 OR x2, NOT x1 OR x2, x1 OR NOT x2
+c Solution: x1=true, x2=true
+p cnf 2 3
+1 2 0
+-1 2 0
+1 -2 0

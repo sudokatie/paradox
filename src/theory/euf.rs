@@ -208,7 +208,7 @@ impl EufSolver {
     }
 
     /// Queue congruence checks after a merge
-    fn queue_congruences(&mut self, old_root: TermId, new_root: TermId, reason: Literal) {
+    fn queue_congruences(&mut self, _old_root: TermId, new_root: TermId, reason: Literal) {
         // Find all function applications that might become congruent
         for &app_id in &self.apps {
             if let EufTerm::App { args, .. } = &self.terms[app_id as usize] {
@@ -381,7 +381,7 @@ impl TheorySolver for EufSolver {
         self.level = level;
 
         // Undo merges
-        while let Some(&(merge_level, new_root, old_root)) = self.merge_trail.last() {
+        while let Some(&(merge_level, _new_root, old_root)) = self.merge_trail.last() {
             if merge_level <= level {
                 break;
             }

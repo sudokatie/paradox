@@ -1,0 +1,10 @@
+; Simple EUF (Equality with Uninterpreted Functions) example
+; Proves: if a = b, then f(a) = f(b)
+(set-logic QF_UF)
+(declare-fun a () Bool)
+(declare-fun b () Bool)
+(declare-fun f (Bool) Bool)
+(assert (= a b))
+(assert (not (= (f a) (f b))))
+(check-sat)
+; Expected: unsat (contradiction via congruence)

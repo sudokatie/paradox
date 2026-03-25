@@ -329,7 +329,7 @@ impl TheorySolver for LiaSolver {
 
     fn check(&mut self) -> TheoryResult<()> {
         // Check all variable bounds are consistent
-        for (var, bounds) in &self.bounds {
+        for (_var, bounds) in &self.bounds {
             if !bounds.is_consistent() {
                 let (_, lower_lit) = bounds.lower_bound().unwrap();
                 let (_, upper_lit) = bounds.upper_bound().unwrap();

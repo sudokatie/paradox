@@ -5,7 +5,7 @@
 
 use super::{TheoryConflict, TheoryPropagation, TheoryResult, TheorySolver};
 use crate::literal::Literal;
-use std::collections::{HashMap, HashSet};
+use std::collections::HashMap;
 
 /// Array identifier
 pub type ArrayId = u32;
