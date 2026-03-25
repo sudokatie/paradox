@@ -1,10 +1,12 @@
 //! SAT solver implementation
 
 mod conflict;
+mod learn;
 mod propagate;
 mod vsids;
 
 pub use conflict::{analyze_conflict, ConflictResult};
+pub use learn::{add_learned_clause, bump_conflict_vars, LearningStats};
 pub use propagate::propagate;
 pub use vsids::Vsids;
 
