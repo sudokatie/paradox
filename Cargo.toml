@@ -1,0 +1,29 @@
+[package]
+name = "paradox"
+version = "0.1.0"
+edition = "2021"
+authors = ["Katie"]
+description = "SAT/SMT solver with CDCL and theory solvers"
+license = "MIT"
+repository = "https://github.com/sudokatie/paradox"
+
+[dependencies]
+clap = { version = "4", features = ["derive"] }
+thiserror = "2"
+log = "0.4"
+env_logger = "0.11"
+ordered-float = "4"
+
+[dev-dependencies]
+criterion = "0.5"
+
+[[bench]]
+name = "sat_bench"
+harness = false
+
+[profile.release]
+lto = true
+codegen-units = 1
+
+[lints.rust]
+unsafe_code = "warn"
