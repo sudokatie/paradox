@@ -3,12 +3,14 @@
 mod conflict;
 mod learn;
 mod propagate;
+mod reduce;
 mod restart;
 mod vsids;
 
 pub use conflict::{analyze_conflict, ConflictResult};
 pub use learn::{add_learned_clause, bump_conflict_vars, LearningStats};
 pub use propagate::propagate;
+pub use reduce::{ClauseReducer, ReductionConfig, compact_clauses};
 pub use restart::{RestartScheduler, RestartStrategy, luby_value};
 pub use vsids::Vsids;
 

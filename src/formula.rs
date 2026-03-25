@@ -95,6 +95,21 @@ impl Formula {
             .enumerate()
             .filter(|(_, c)| c.is_unit())
     }
+
+    /// Replace all clauses (used for clause reduction)
+    pub fn replace_clauses(&mut self, new_clauses: Vec<Clause>) {
+        self.clauses = new_clauses;
+        // Recalculate num_vars
+        self.num_vars = 0;
+        for clause in &self.clauses {
+            for lit in clause.literals() {
+                let var = lit.variable().index();
+                if var > self.num_vars {
+                    self.num_vars = var;
+                }
+            }
+        }
+    }
 }
 
 impl Default for Formula {
