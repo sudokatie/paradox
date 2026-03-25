@@ -11,6 +11,8 @@ pub mod formula;
 pub mod assignment;
 pub mod trail;
 pub mod watch;
+pub mod parser;
+pub mod solver;
 
 pub use literal::{Literal, Variable};
 pub use clause::{Clause, ClauseRef};
@@ -18,6 +20,8 @@ pub use formula::Formula;
 pub use assignment::{Assignments, AssignmentInfo, Value};
 pub use trail::Trail;
 pub use watch::{WatchLists, Watcher, init_watches};
+pub use parser::{parse_dimacs, DimacsError};
+pub use solver::{Solver, SolveResult, propagate};
 
 #[cfg(test)]
 mod tests {

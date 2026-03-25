@@ -11,6 +11,8 @@ pub struct Trail {
     /// Index into assignments where each level starts
     /// levels[i] is the index where level i begins
     levels: Vec<usize>,
+    /// Index of next literal to propagate
+    propagate_head: usize,
 }
 
 impl Trail {
@@ -19,6 +21,24 @@ impl Trail {
         Trail {
             assignments: Vec::new(),
             levels: vec![0], // Level 0 starts at index 0
+            propagate_head: 0,
+        }
+    }
+
+    /// Push a literal onto the trail (generic push)
+    pub fn push(&mut self, lit: Literal) {
+        self.assignments.push(lit);
+    }
+
+    /// Peek at the next literal to propagate (without advancing)
+    pub fn peek_propagate(&self) -> Option<&Literal> {
+        self.assignments.get(self.propagate_head)
+    }
+
+    /// Advance the propagation head
+    pub fn advance_propagate(&mut self) {
+        if self.propagate_head < self.assignments.len() {
+            self.propagate_head += 1;
         }
     }
 
@@ -63,6 +83,11 @@ impl Trail {
         
         self.assignments.truncate(start_idx);
         self.levels.truncate(level + 1);
+        
+        // Reset propagate head if it's past the new end
+        if self.propagate_head > start_idx {
+            self.propagate_head = start_idx;
+        }
         
         unassigned
     }
