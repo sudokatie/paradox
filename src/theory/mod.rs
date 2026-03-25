@@ -10,6 +10,7 @@
 pub mod euf;
 pub mod lia;
 pub mod bv;
+pub mod array;
 
 use crate::literal::Literal;
 use std::fmt;
@@ -17,6 +18,7 @@ use std::fmt;
 pub use euf::EufSolver;
 pub use lia::LiaSolver;
 pub use bv::BvSolver;
+pub use array::ArraySolver;
 
 /// Result of theory operations
 pub type TheoryResult<T> = Result<T, TheoryConflict>;
