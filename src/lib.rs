@@ -13,6 +13,7 @@ pub mod trail;
 pub mod watch;
 pub mod parser;
 pub mod solver;
+pub mod theory;
 
 pub use literal::{Literal, Variable};
 pub use clause::{Clause, ClauseRef};
@@ -20,8 +21,9 @@ pub use formula::Formula;
 pub use assignment::{Assignments, AssignmentInfo, Value};
 pub use trail::Trail;
 pub use watch::{WatchLists, Watcher, init_watches};
-pub use parser::{parse_dimacs, DimacsError};
+pub use parser::{parse_dimacs, DimacsError, parse_smtlib, SmtLibError};
 pub use solver::{Solver, SolveResult, propagate, analyze_conflict, ConflictResult};
+pub use theory::{TheorySolver, TheoryConflict, TheoryPropagation, TheoryManager};
 
 #[cfg(test)]
 mod tests {
