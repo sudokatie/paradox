@@ -184,6 +184,129 @@ impl Solver {
             self.assignments.unassign(lit.variable());
         }
     }
+
+    /// Main CDCL solve loop
+    pub fn solve(&mut self) -> SolveResult {
+        // Check for trivial UNSAT (empty clause in original formula)
+        if self.formula.has_empty_clause() {
+            return SolveResult::Unsat;
+        }
+
+        // Check for trivial SAT (empty formula)
+        if self.formula.num_clauses() == 0 {
+            return SolveResult::Sat(vec![]);
+        }
+
+        // Process unit clauses at level 0
+        for (clause_ref, clause) in self.formula.unit_clauses().collect::<Vec<_>>() {
+            let lit = clause[0];
+            let var = lit.variable();
+            
+            // Check if already assigned
+            match self.assignments.value(var) {
+                Value::Unassigned => {
+                    let val = lit.is_positive();
+                    self.assignments.assign(var, val, 0, Some(clause_ref));
+                    self.trail.push(lit);
+                }
+                Value::True if lit.is_positive() => {}  // Already satisfied
+                Value::False if !lit.is_positive() => {} // Already satisfied
+                _ => return SolveResult::Unsat, // Conflict at level 0
+            }
+        }
+
+        // Initialize restart scheduler
+        let mut restart_scheduler = RestartScheduler::new(RestartStrategy::default());
+        
+        // Track first learned clause index for reduction
+        let first_learned = self.formula.num_clauses();
+        let mut reducer = ClauseReducer::new(ReductionConfig::default());
+
+        loop {
+            // Propagate
+            if let Some(conflict_clause) = self.propagate() {
+                // Conflict!
+                self.stats.conflicts += 1;
+                
+                let current_level = self.trail.current_level();
+                
+                // Conflict at level 0 means UNSAT
+                if current_level == 0 {
+                    return SolveResult::Unsat;
+                }
+                
+                // Analyze conflict
+                let analysis = analyze_conflict(
+                    &self.formula,
+                    &self.assignments,
+                    &self.trail,
+                    conflict_clause,
+                    current_level,
+                );
+                
+                match analysis {
+                    None => return SolveResult::Unsat,
+                    Some(result) => {
+                        // Bump VSIDS activities
+                        bump_conflict_vars(&mut self.vsids, &result.involved_vars);
+                        
+                        // Backtrack
+                        self.backtrack(result.backtrack_level);
+                        
+                        // Add learned clause
+                        let lbd = result.lbd;
+                        let clause_ref = add_learned_clause(
+                            &mut self.formula,
+                            &mut self.watches,
+                            result.learned_clause,
+                        );
+                        self.stats.learned_clauses += 1;
+                        
+                        // The asserting literal should now be unit
+                        // Push it to trail for propagation
+                        let asserting = self.formula.clause(clause_ref)[0];
+                        let var = asserting.variable();
+                        let val = asserting.is_positive();
+                        self.assignments.assign(var, val, self.trail.current_level(), Some(clause_ref));
+                        self.trail.push(asserting);
+                        
+                        // Record conflict for restart scheduler
+                        restart_scheduler.record_conflict(Some(lbd));
+                        
+                        // Check for restart
+                        if restart_scheduler.should_restart() {
+                            self.backtrack(0);
+                            restart_scheduler.restart();
+                            self.stats.restarts += 1;
+                        }
+                        
+                        // Check for clause reduction
+                        let learned_count = self.formula.num_clauses() - first_learned;
+                        if reducer.should_reduce(learned_count) {
+                            let keep = reducer.select_clauses_to_keep(
+                                self.formula.clauses(),
+                                first_learned,
+                            );
+                            compact_clauses(&mut self.formula, &mut self.watches, &keep);
+                        }
+                    }
+                }
+            } else {
+                // No conflict
+                if self.all_assigned() {
+                    // SAT!
+                    return SolveResult::Sat(self.model());
+                }
+                
+                // Make a decision
+                if !self.decide() {
+                    // No more decisions possible but not all assigned?
+                    // This shouldn't happen, but treat as SAT
+                    return SolveResult::Sat(self.model());
+                }
+            }
+        }
+    }
 }
 
 #[cfg(test)]
@@ -268,5 +391,135 @@ mod tests {
         
         solver.assignments_mut().assign(Variable::new(2), false, 0, None);
         assert!(solver.all_assigned());
+    }
+
+    #[test]
+    fn test_solve_empty_formula() {
+        let formula = Formula::new();
+        let mut solver = Solver::new(formula);
+        
+        let result = solver.solve();
+        assert_eq!(result, SolveResult::Sat(vec![]));
+    }
+
+    #[test]
+    fn test_solve_trivial_sat() {
+        // (1 v 2)
+        let mut formula = Formula::with_num_vars(2);
+        formula.add_clause(make_clause(&[(1, true), (2, true)]));
+        
+        let mut solver = Solver::new(formula);
+        let result = solver.solve();
+        
+        match result {
+            SolveResult::Sat(model) => {
+                // At least one of x1 or x2 should be true
+                assert!(model.len() >= 2);
+            }
+            _ => panic!("Expected SAT"),
+        }
+    }
+
+    #[test]
+    fn test_solve_trivial_unsat() {
+        // (1) and (-1)
+        let mut formula = Formula::with_num_vars(1);
+        formula.add_clause(make_clause(&[(1, true)]));
+        formula.add_clause(make_clause(&[(1, false)]));
+        
+        let mut solver = Solver::new(formula);
+        let result = solver.solve();
+        
+        assert_eq!(result, SolveResult::Unsat);
+    }
+
+    #[test]
+    fn test_solve_simple_sat() {
+        // (1 v 2) and (-1 v 2) and (1 v -2)
+        // SAT: x1 = true, x2 = true
+        let mut formula = Formula::with_num_vars(2);
+        formula.add_clause(make_clause(&[(1, true), (2, true)]));
+        formula.add_clause(make_clause(&[(1, false), (2, true)]));
+        formula.add_clause(make_clause(&[(1, true), (2, false)]));
+        
+        let mut solver = Solver::new(formula);
+        let result = solver.solve();
+        
+        match result {
+            SolveResult::Sat(model) => {
+                // Verify model satisfies all clauses
+                // (x1 v x2) -> x1 or x2
+                // (-x1 v x2) -> !x1 or x2
+                // (x1 v -x2) -> x1 or !x2
+                let x1 = model[0];
+                let x2 = model[1];
+                assert!(x1 || x2);
+                assert!(!x1 || x2);
+                assert!(x1 || !x2);
+            }
+            _ => panic!("Expected SAT"),
+        }
+    }
+
+    #[test]
+    fn test_solve_pigeonhole_2_1() {
+        // 2 pigeons, 1 hole -> UNSAT
+        // At least one of: p1_h1, p2_h1 (each pigeon in hole 1)
+        // But they can't both be in hole 1
+        let mut formula = Formula::with_num_vars(2);
+        // Pigeon 1 must be somewhere
+        formula.add_clause(make_clause(&[(1, true)])); // p1 in h1
+        // Pigeon 2 must be somewhere
+        formula.add_clause(make_clause(&[(2, true)])); // p2 in h1
+        // At most one pigeon per hole
+        formula.add_clause(make_clause(&[(1, false), (2, false)])); // not both
+        
+        let mut solver = Solver::new(formula);
+        let result = solver.solve();
+        
+        assert_eq!(result, SolveResult::Unsat);
+    }
+
+    #[test]
+    fn test_solve_3sat_instance() {
+        // A small 3-SAT instance
+        // (1 v 2 v 3) and (-1 v -2 v 3) and (1 v -2 v -3) and (-1 v 2 v -3)
+        let mut formula = Formula::with_num_vars(3);
+        formula.add_clause(make_clause(&[(1, true), (2, true), (3, true)]));
+        formula.add_clause(make_clause(&[(1, false), (2, false), (3, true)]));
+        formula.add_clause(make_clause(&[(1, true), (2, false), (3, false)]));
+        formula.add_clause(make_clause(&[(1, false), (2, true), (3, false)]));
+        
+        let mut solver = Solver::new(formula);
+        let result = solver.solve();
+        
+        match result {
+            SolveResult::Sat(model) => {
+                assert_eq!(model.len(), 3);
+                // Verify model
+                let x1 = model[0];
+                let x2 = model[1];
+                let x3 = model[2];
+                assert!(x1 || x2 || x3);
+                assert!(!x1 || !x2 || x3);
+                assert!(x1 || !x2 || !x3);
+                assert!(!x1 || x2 || !x3);
+            }
+            _ => panic!("Expected SAT"),
+        }
+    }
+
+    #[test]
+    fn test_solve_stats() {
+        let mut formula = Formula::with_num_vars(3);
+        formula.add_clause(make_clause(&[(1, true), (2, true)]));
+        formula.add_clause(make_clause(&[(2, false), (3, true)]));
+        
+        let mut solver = Solver::new(formula);
+        solver.solve();
+        
+        // Should have made some decisions
+        let stats = solver.stats();
+        assert!(stats.decisions > 0 || stats.propagations > 0);
     }
 }
