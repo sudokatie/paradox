@@ -1,15 +1,21 @@
 //! Paradox CLI - SAT/SMT solver.
 
 use clap::Parser;
-use paradox::{parse_dimacs_file, solver::Solver};
+use paradox::{
+    parse_dimacs_file, parse_smtlib_file,
+    detect_format, InputFormat,
+    solver::Solver,
+    dpll_t::DpllT,
+};
 use std::path::PathBuf;
 use std::process::ExitCode;
 
 #[derive(Parser)]
 #[command(name = "paradox")]
-#[command(about = "SAT/SMT solver with CDCL")]
+#[command(about = "SAT/SMT solver with CDCL and theory solvers")]
+#[command(version)]
 struct Cli {
-    /// Input file (DIMACS CNF or SMT-LIB)
+    /// Input file (DIMACS CNF or SMT-LIB 2)
     input: PathBuf,
 
     /// Show verbose output
@@ -23,12 +29,37 @@ struct Cli {
     /// Timeout in seconds
     #[arg(short, long)]
     timeout: Option<u64>,
+
+    /// Force input format (dimacs or smtlib)
+    #[arg(short, long)]
+    format: Option<String>,
 }
 
 fn main() -> ExitCode {
     env_logger::init();
     let cli = Cli::parse();
 
+    // Detect or use specified format
+    let format = if let Some(ref fmt) = cli.format {
+        match fmt.to_lowercase().as_str() {
+            "dimacs" | "cnf" => InputFormat::Dimacs,
+            "smtlib" | "smt2" | "smt" => InputFormat::SmtLib,
+            _ => {
+                eprintln!("Unknown format: {}. Use 'dimacs' or 'smtlib'.", fmt);
+                return ExitCode::FAILURE;
+            }
+        }
+    } else {
+        detect_format(&cli.input)
+    };
+
+    match format {
+        InputFormat::Dimacs => solve_dimacs(&cli),
+        InputFormat::SmtLib => solve_smtlib(&cli),
+    }
+}
+
+fn solve_dimacs(cli: &Cli) -> ExitCode {
     // Parse input file
     let formula = match parse_dimacs_file(&cli.input) {
         Ok(f) => f,
@@ -84,6 +115,54 @@ fn main() -> ExitCode {
             if cli.stats {
                 print_stats(&solver);
             }
+            ExitCode::FAILURE
+        }
+    }
+}
+
+fn solve_smtlib(cli: &Cli) -> ExitCode {
+    // Parse input file
+    let problem = match parse_smtlib_file(&cli.input) {
+        Ok(p) => p,
+        Err(e) => {
+            eprintln!("Error parsing {}: {}", cli.input.display(), e);
+            return ExitCode::FAILURE;
+        }
+    };
+
+    if cli.verbose {
+        if let Some(ref logic) = problem.logic {
+            eprintln!("c Logic: {:?}", logic);
+        }
+        eprintln!(
+            "c {} declarations, {} assertions",
+            problem.declarations.len(),
+            problem.assertions.len()
+        );
+    }
+
+    // Create DPLL(T) solver
+    let mut solver = DpllT::new(problem);
+
+    // Solve
+    let result = solver.solve();
+
+    // Output result
+    match result {
+        paradox::solver::SolveResult::Sat(model) => {
+            println!("sat");
+            if cli.verbose {
+                // Print model (would need variable name mapping for proper output)
+                eprintln!("c Model: {:?}", model);
+            }
+            ExitCode::from(10)
+        }
+        paradox::solver::SolveResult::Unsat => {
+            println!("unsat");
+            ExitCode::from(20)
+        }
+        paradox::solver::SolveResult::Unknown => {
+            println!("unknown");
             ExitCode::FAILURE
         }
     }

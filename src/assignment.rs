@@ -203,6 +203,16 @@ impl Assignments {
             .filter(|(_, a)| !a.value.is_assigned())
             .map(|(i, _)| Variable::from_index(i))
     }
+
+    /// Check if all variables are assigned.
+    pub fn all_assigned(&self) -> bool {
+        self.assignments.iter().all(|a| a.value.is_assigned())
+    }
+
+    /// Get the number of variables.
+    pub fn num_vars(&self) -> usize {
+        self.assignments.len()
+    }
 }
 
 #[cfg(test)]

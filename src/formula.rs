@@ -10,6 +10,10 @@ pub struct Formula {
     clauses: Vec<Clause>,
     /// Number of variables (max variable index).
     num_vars: u32,
+    /// Index marking end of original (non-learned) clauses.
+    original_end: usize,
+    /// Deleted clause markers.
+    deleted: Vec<bool>,
 }
 
 impl Formula {
@@ -18,6 +22,8 @@ impl Formula {
         Formula {
             clauses: Vec::new(),
             num_vars: 0,
+            original_end: 0,
+            deleted: Vec::new(),
         }
     }
 
@@ -26,6 +32,8 @@ impl Formula {
         Formula {
             clauses: Vec::with_capacity(num_clauses),
             num_vars,
+            original_end: 0,
+            deleted: Vec::with_capacity(num_clauses),
         }
     }
 
@@ -40,7 +48,48 @@ impl Formula {
         }
         let idx = self.clauses.len();
         self.clauses.push(clause);
+        self.deleted.push(false);
         idx
+    }
+    
+    /// Mark the end of original clauses (call after adding all original clauses).
+    pub fn mark_original_end(&mut self) {
+        self.original_end = self.clauses.len();
+    }
+    
+    /// Get number of original (non-learned) clauses.
+    pub fn num_original_clauses(&self) -> usize {
+        self.original_end
+    }
+    
+    /// Mark a clause as deleted.
+    pub fn mark_deleted(&mut self, idx: ClauseRef) {
+        if idx < self.deleted.len() {
+            self.deleted[idx] = true;
+        }
+    }
+    
+    /// Check if a clause is deleted.
+    pub fn is_deleted(&self, idx: ClauseRef) -> bool {
+        idx < self.deleted.len() && self.deleted[idx]
+    }
+    
+    /// Compact the formula by removing deleted clauses.
+    pub fn compact(&mut self) {
+        let mut write_idx = self.original_end;
+        
+        for read_idx in self.original_end..self.clauses.len() {
+            if !self.deleted[read_idx] {
+                if write_idx != read_idx {
+                    self.clauses.swap(write_idx, read_idx);
+                    self.deleted.swap(write_idx, read_idx);
+                }
+                write_idx += 1;
+            }
+        }
+        
+        self.clauses.truncate(write_idx);
+        self.deleted.truncate(write_idx);
     }
 
     /// Get the number of variables.

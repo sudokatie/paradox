@@ -100,7 +100,8 @@ pub fn propagate_literal(
                 clause.swap(0, k);
                 
                 // Add to new literal's watch list
-                watches.add_watch(candidate.negate(), clause_idx, other_lit);
+                // watches[candidate] = clauses to check when candidate becomes false
+                watches.add_watch(candidate, clause_idx, other_lit);
                 
                 found_replacement = true;
                 break;

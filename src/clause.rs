@@ -90,6 +90,11 @@ impl Clause {
         self.learned
     }
 
+    /// Set whether this is a learned clause.
+    pub fn set_learned(&mut self, learned: bool) {
+        self.learned = learned;
+    }
+
     /// Get the activity score.
     pub fn activity(&self) -> f64 {
         self.activity
