@@ -157,11 +157,13 @@ impl Solver {
             PropagateResult::Conflict(_) => return SolveResult::Unsat,
         }
         
+        // Track propagation position across iterations
+        let mut prop_start = self.trail.len();
+        
         // Main CDCL loop
         loop {
-            // Propagate
+            // Propagate from where we left off
             let level = self.trail.current_level();
-            let prop_start = self.trail.len();
             
             match propagate(
                 &mut self.formula,
@@ -172,6 +174,9 @@ impl Solver {
                 prop_start,
             ) {
                 PropagateResult::Ok => {
+                    // Update prop_start to current trail length for next iteration
+                    prop_start = self.trail.len();
+                    
                     // Check if all variables are assigned
                     if self.all_assigned() {
                         return SolveResult::Sat(self.extract_model());
@@ -180,6 +185,7 @@ impl Solver {
                     // Check for restart
                     if self.config.restarts_enabled && self.restart_scheduler.should_restart() {
                         self.restart();
+                        prop_start = self.trail.len(); // Reset after restart
                         continue;
                     }
                     
@@ -191,7 +197,8 @@ impl Solver {
                         let _ = deleted;
                     }
                     
-                    // Make a decision
+                    // Make a decision - this adds to the trail
+                    // prop_start stays where it is, so next iteration will propagate the decision
                     self.decide();
                 }
                 PropagateResult::Conflict(conflict_clause) => {
@@ -245,6 +252,9 @@ impl Solver {
                         self.assignments.assign(var, value, result.backtrack_level, Some(clause_idx));
                         self.trail.push_propagation(asserting_lit);
                         
+                        // Update prop_start to propagate the asserting literal
+                        prop_start = self.trail.len() - 1;
+                        
                         // Save phase
                         let var_idx = var.to_index();
                         if var_idx < self.phases.len() {
@@ -282,6 +292,9 @@ impl Solver {
             PropagateResult::Conflict(_) => return SolveResult::Unsat,
         }
         
+        // Track propagation position across iterations
+        let mut prop_start = self.trail.len();
+        
         // Main CDCL loop with timeout check
         let mut iterations = 0u64;
         loop {
@@ -292,7 +305,6 @@ impl Solver {
             }
             
             let level = self.trail.current_level();
-            let prop_start = self.trail.len();
             
             match propagate(
                 &mut self.formula,
@@ -303,12 +315,16 @@ impl Solver {
                 prop_start,
             ) {
                 PropagateResult::Ok => {
+                    // Update prop_start to current trail length
+                    prop_start = self.trail.len();
+                    
                     if self.all_assigned() {
                         return SolveResult::Sat(self.extract_model());
                     }
                     
                     if self.config.restarts_enabled && self.restart_scheduler.should_restart() {
                         self.restart();
+                        prop_start = self.trail.len(); // Reset after restart
                         continue;
                     }
                     
@@ -318,6 +334,7 @@ impl Solver {
                         self.stats.reductions += 1;
                     }
                     
+                    // Make decision - prop_start stays, so next iteration propagates it
                     self.decide();
                 }
                 PropagateResult::Conflict(conflict_clause) => {
@@ -361,6 +378,9 @@ impl Solver {
                         };
                         self.assignments.assign(var, value, result.backtrack_level, Some(clause_idx));
                         self.trail.push_propagation(asserting_lit);
+                        
+                        // Update prop_start to propagate the asserting literal
+                        prop_start = self.trail.len() - 1;
                         
                         let var_idx = var.to_index();
                         if var_idx < self.phases.len() {
