@@ -14,6 +14,7 @@ pub mod watch;
 pub mod parser;
 pub mod solver;
 pub mod theory;
+pub mod verify;
 
 pub use literal::{Literal, Variable};
 pub use clause::{Clause, ClauseRef};

@@ -2,6 +2,7 @@
 
 use clap::Parser;
 use paradox::{parse_dimacs, Formula, Solver, SolveResult};
+use paradox::verify::{DratVerifier, VerifyResult};
 use std::fs::File;
 use std::io::{self, BufRead, BufReader};
 use std::path::PathBuf;
@@ -34,6 +35,14 @@ struct Args {
     /// Timeout in seconds (0 = no timeout)
     #[arg(short, long, default_value = "0")]
     timeout: u64,
+
+    /// Write DRAT proof to file (for UNSAT results)
+    #[arg(long, value_name = "PROOF_FILE")]
+    proof: Option<PathBuf>,
+
+    /// Verify a DRAT proof file instead of solving
+    #[arg(long, value_name = "PROOF_FILE")]
+    verify: Option<PathBuf>,
 }
 
 fn main() -> ExitCode {
@@ -43,6 +52,11 @@ fn main() -> ExitCode {
     if args.verbose {
         env_logger::Builder::from_env(env_logger::Env::default().default_filter_or("info"))
             .init();
+    }
+
+    // Handle verify mode
+    if let Some(proof_path) = &args.verify {
+        return verify_proof(&args.input, proof_path, args.verbose);
     }
 
     // Read input
@@ -65,6 +79,17 @@ fn main() -> ExitCode {
     // Create solver
     let mut solver = Solver::new(formula);
 
+    // Enable proof logging if requested
+    if let Some(proof_path) = &args.proof {
+        if let Err(e) = solver.enable_proof_logging(proof_path) {
+            eprintln!("Error opening proof file: {}", e);
+            return ExitCode::from(1);
+        }
+        if args.verbose {
+            eprintln!("c Writing DRAT proof to {:?}", proof_path);
+        }
+    }
+
     // Solve with optional timeout
     let start = Instant::now();
     let result = if args.timeout > 0 {
@@ -86,6 +111,11 @@ fn main() -> ExitCode {
         }
         SolveResult::Unsat => {
             println!("s UNSATISFIABLE");
+            if let Some((clauses, deletions)) = solver.proof_stats() {
+                if args.verbose {
+                    eprintln!("c Proof: {} clauses, {} deletions", clauses, deletions);
+                }
+            }
         }
         SolveResult::Unknown => {
             println!("s UNKNOWN");
@@ -102,6 +132,54 @@ fn main() -> ExitCode {
         SolveResult::Sat(_) => ExitCode::from(10),
         SolveResult::Unsat => ExitCode::from(20),
         SolveResult::Unknown => ExitCode::from(0),
+    }
+}
+
+/// Verify a DRAT proof
+fn verify_proof(cnf_path: &PathBuf, proof_path: &PathBuf, verbose: bool) -> ExitCode {
+    if verbose {
+        eprintln!("c Verifying proof {:?} against {:?}", proof_path, cnf_path);
+    }
+
+    // Create verifier from CNF file
+    let mut verifier = match DratVerifier::from_cnf_file(cnf_path) {
+        Ok(v) => v,
+        Err(e) => {
+            eprintln!("Error reading CNF file: {:?}", e);
+            return ExitCode::from(1);
+        }
+    };
+
+    let start = Instant::now();
+    
+    // Verify the proof
+    let result = match verifier.verify_proof(proof_path) {
+        Ok(r) => r,
+        Err(e) => {
+            eprintln!("Error reading proof file: {:?}", e);
+            return ExitCode::from(1);
+        }
+    };
+
+    let elapsed = start.elapsed();
+
+    match result {
+        VerifyResult::Valid => {
+            println!("s VERIFIED");
+            if verbose {
+                let stats = verifier.stats();
+                eprintln!("c Clauses checked: {}", stats.clauses_checked);
+                eprintln!("c Deletions: {}", stats.deletions_processed);
+                eprintln!("c RUP checks: {}", stats.rup_checks);
+                eprintln!("c Time: {:.3}s", elapsed.as_secs_f64());
+            }
+            ExitCode::from(0)
+        }
+        VerifyResult::Invalid { line, reason } => {
+            println!("s INVALID");
+            eprintln!("c Proof invalid at line {}: {}", line, reason);
+            ExitCode::from(1)
+        }
     }
 }
 
