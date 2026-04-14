@@ -3,6 +3,7 @@
 mod conflict;
 mod learn;
 mod propagate;
+pub mod proof;
 mod reduce;
 mod restart;
 mod vsids;
@@ -10,6 +11,7 @@ mod vsids;
 pub use conflict::{analyze_conflict, ConflictResult};
 pub use learn::{add_learned_clause, bump_conflict_vars, LearningStats};
 pub use propagate::propagate;
+pub use proof::ProofWriter;
 pub use reduce::{ClauseReducer, ReductionConfig, compact_clauses};
 pub use restart::{RestartScheduler, RestartStrategy, luby_value};
 pub use vsids::Vsids;
@@ -61,6 +63,8 @@ pub struct Solver {
     vsids: Vsids,
     /// Solving statistics
     stats: Stats,
+    /// DRAT proof writer (optional)
+    proof_writer: Option<ProofWriter>,
 }
 
 impl Solver {
@@ -78,7 +82,29 @@ impl Solver {
             watches,
             vsids: Vsids::new(num_vars),
             stats: Stats::default(),
+            proof_writer: None,
         }
+    }
+
+    /// Enable DRAT proof logging to the given file
+    pub fn enable_proof_logging<P: AsRef<std::path::Path>>(&mut self, path: P) -> std::io::Result<()> {
+        self.proof_writer = Some(ProofWriter::new(path)?);
+        Ok(())
+    }
+
+    /// Disable proof logging
+    pub fn disable_proof_logging(&mut self) {
+        self.proof_writer = None;
+    }
+
+    /// Check if proof logging is enabled
+    pub fn is_proof_logging_enabled(&self) -> bool {
+        self.proof_writer.is_some()
+    }
+
+    /// Get proof statistics (clauses logged, deletions logged)
+    pub fn proof_stats(&self) -> Option<(u64, u64)> {
+        self.proof_writer.as_ref().map(|w| (w.clause_count(), w.deletion_count()))
     }
 
     /// Get the current formula
@@ -255,6 +281,12 @@ impl Solver {
                         
                         // Add learned clause
                         let lbd = result.lbd;
+                        
+                        // Log to DRAT proof before adding
+                        if let Some(ref mut writer) = self.proof_writer {
+                            let _ = writer.add_clause(&result.learned_clause);
+                        }
+                        
                         let clause_ref = add_learned_clause(
                             &mut self.formula,
                             &mut self.watches,
@@ -287,6 +319,17 @@ impl Solver {
                                 self.formula.clauses(),
                                 first_learned,
                             );
+                            
+                            // Log deleted clauses to DRAT proof
+                            if let Some(ref mut writer) = self.proof_writer {
+                                let keep_set: std::collections::HashSet<_> = keep.iter().collect();
+                                for (idx, clause) in self.formula.clauses().iter().enumerate() {
+                                    if !keep_set.contains(&idx) {
+                                        let _ = writer.delete_clause(clause);
+                                    }
+                                }
+                            }
+                            
                             compact_clauses(&mut self.formula, &mut self.watches, &keep);
                         }
                     }
