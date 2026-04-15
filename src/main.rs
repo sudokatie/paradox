@@ -5,9 +5,10 @@ use paradox::{
     parse_dimacs_file, parse_smtlib_file,
     detect_format, InputFormat,
     solver::Solver,
+    solver::maxsat::{MaxSatSolver, MaxSatResult, parse_wcnf},
     dpll_t::DpllT,
 };
-use std::fs::File;
+use std::fs::{self, File};
 use std::io::Write;
 use std::path::PathBuf;
 use std::process::ExitCode;
@@ -73,13 +74,24 @@ fn main() -> ExitCode {
         },
     };
 
+    // Check for WCNF extension first
+    let is_wcnf = input.extension()
+        .map(|ext| ext == "wcnf")
+        .unwrap_or(false)
+        || cli.format.as_deref() == Some("wcnf")
+        || cli.format.as_deref() == Some("maxsat");
+
+    if is_wcnf {
+        return solve_maxsat(&cli, &input);
+    }
+
     // Detect or use specified format
     let format = if let Some(ref fmt) = cli.format {
         match fmt.to_lowercase().as_str() {
             "dimacs" | "cnf" => InputFormat::Dimacs,
             "smtlib" | "smt2" | "smt" => InputFormat::SmtLib,
             _ => {
-                eprintln!("Unknown format: {}. Use 'dimacs' or 'smtlib'.", fmt);
+                eprintln!("Unknown format: {}. Use 'dimacs', 'smtlib', or 'wcnf'.", fmt);
                 return ExitCode::FAILURE;
             }
         }
@@ -91,6 +103,94 @@ fn main() -> ExitCode {
         InputFormat::Dimacs => solve_dimacs(&cli, &input),
         InputFormat::SmtLib => solve_smtlib(&cli, &input),
     }
+}
+
+fn solve_maxsat(cli: &Cli, input: &PathBuf) -> ExitCode {
+    let start_time = Instant::now();
+
+    // Read and parse WCNF file
+    let content = match fs::read_to_string(input) {
+        Ok(c) => c,
+        Err(e) => {
+            eprintln!("Error reading {}: {}", input.display(), e);
+            return ExitCode::FAILURE;
+        }
+    };
+
+    let formula = match parse_wcnf(&content) {
+        Ok(f) => f,
+        Err(e) => {
+            eprintln!("Error parsing {}: {}", input.display(), e);
+            return ExitCode::FAILURE;
+        }
+    };
+
+    if cli.verbose {
+        eprintln!(
+            "c Loaded {} variables, {} hard clauses, {} soft clauses (total weight: {})",
+            formula.num_vars,
+            formula.num_hard(),
+            formula.num_soft(),
+            formula.total_weight()
+        );
+    }
+
+    // Create MaxSAT solver
+    let mut solver = MaxSatSolver::new(formula);
+
+    // Solve
+    let result = solver.solve();
+    let elapsed = start_time.elapsed();
+
+    // Output result
+    match result {
+        MaxSatResult::Optimum { model, cost, satisfied } => {
+            println!("s OPTIMUM FOUND");
+            println!("o {}", cost);
+            
+            // Print model in DIMACS format
+            print!("v ");
+            for (i, &val) in model.iter().enumerate() {
+                let var = (i + 1) as i32;
+                print!("{} ", if val { var } else { -var });
+            }
+            println!("0");
+
+            if cli.verbose {
+                eprintln!("c Satisfied {} of {} soft clauses", satisfied.len(), solver.stats().relax_vars);
+            }
+
+            if cli.stats {
+                print_maxsat_stats(&solver, elapsed);
+            }
+            ExitCode::from(10) // OPTIMUM convention
+        }
+        MaxSatResult::Unsatisfiable => {
+            println!("s UNSATISFIABLE");
+            
+            if cli.stats {
+                print_maxsat_stats(&solver, elapsed);
+            }
+            ExitCode::from(20) // UNSAT convention
+        }
+        MaxSatResult::Unknown => {
+            println!("s UNKNOWN");
+            if cli.stats {
+                print_maxsat_stats(&solver, elapsed);
+            }
+            ExitCode::FAILURE
+        }
+    }
+}
+
+fn print_maxsat_stats(solver: &MaxSatSolver, elapsed: std::time::Duration) {
+    let stats = solver.stats();
+    eprintln!("c MaxSAT Statistics:");
+    eprintln!("c   SAT calls: {}", stats.sat_calls);
+    eprintln!("c   cores extracted: {}", stats.cores_extracted);
+    eprintln!("c   relaxation vars: {}", stats.relax_vars);
+    eprintln!("c   AMO constraints: {}", stats.amo_constraints);
+    eprintln!("c   time: {:.2}s", elapsed.as_secs_f64());
 }
 
 fn solve_dimacs(cli: &Cli, input: &PathBuf) -> ExitCode {

@@ -14,6 +14,7 @@ pub mod conflict;
 pub mod learn;
 pub mod restart;
 pub mod reduce;
+pub mod maxsat;
 
 use std::time::{Duration, Instant};
 

@@ -61,3 +61,4 @@ pub use watch::{WatchLists, Watcher, init_watches};
 pub use parser::{parse_dimacs, parse_dimacs_file, parse_smtlib, parse_smtlib_file};
 pub use parser::{InputFormat, detect_format};
 pub use dpll_t::DpllT;
+pub use solver::maxsat::{MaxSatFormula, MaxSatSolver, MaxSatResult, MaxSatStats, SoftClause, parse_wcnf};
