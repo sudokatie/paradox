@@ -174,7 +174,6 @@ impl Default for Trail {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::literal::Variable;
 
     fn lit(i: i32) -> Literal {
         Literal::from_dimacs(i)

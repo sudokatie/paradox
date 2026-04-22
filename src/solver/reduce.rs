@@ -169,7 +169,7 @@ pub fn compact_clauses(
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::literal::{Literal, Variable};
+    use crate::literal::Literal;
 
     fn lit(i: i32) -> Literal {
         Literal::from_dimacs(i)

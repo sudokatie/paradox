@@ -140,7 +140,6 @@ impl fmt::Display for Clause {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::literal::Variable;
 
     #[test]
     fn test_clause_creation() {

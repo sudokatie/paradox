@@ -79,7 +79,6 @@ impl LearningStats {
 mod tests {
     use super::*;
     use crate::literal::Literal;
-    use crate::assignment::Assignments;
 
     fn lit(i: i32) -> Literal {
         Literal::from_dimacs(i)

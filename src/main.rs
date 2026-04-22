@@ -7,6 +7,9 @@ use std::fs::File;
 use std::io::{self, BufRead, BufReader};
 use std::path::PathBuf;
 use std::process::ExitCode;
+use std::sync::atomic::{AtomicBool, Ordering};
+use std::sync::Arc;
+use std::thread;
 use std::time::{Duration, Instant};
 
 /// Paradox - A SAT/SMT solver with CDCL and theory solvers
@@ -92,10 +95,23 @@ fn main() -> ExitCode {
 
     // Solve with optional timeout
     let start = Instant::now();
-    let result = if args.timeout > 0 {
-        // TODO: Implement proper timeout with threads
-        // For now, just solve without timeout
-        solver.solve()
+    let timeout_secs = args.timeout;
+    let result = if timeout_secs > 0 {
+        let cancel = Arc::new(AtomicBool::new(false));
+        let cancel_clone = Arc::clone(&cancel);
+
+        // Spawn timer thread that sets cancel flag after timeout
+        let timer_handle = thread::spawn(move || {
+            thread::sleep(Duration::from_secs(timeout_secs));
+            cancel_clone.store(true, Ordering::Relaxed);
+        });
+
+        let result = solver.solve_with_cancel(Some(cancel));
+
+        // Clean up timer thread (it may still be sleeping)
+        drop(timer_handle);
+
+        result
     } else {
         solver.solve()
     };
@@ -120,6 +136,9 @@ fn main() -> ExitCode {
         SolveResult::Unknown => {
             println!("s UNKNOWN");
         }
+        SolveResult::Timeout => {
+            println!("Timeout after {}s", timeout_secs);
+        }
     }
 
     // Print statistics
@@ -131,7 +150,7 @@ fn main() -> ExitCode {
     match result {
         SolveResult::Sat(_) => ExitCode::from(10),
         SolveResult::Unsat => ExitCode::from(20),
-        SolveResult::Unknown => ExitCode::from(0),
+        SolveResult::Unknown | SolveResult::Timeout => ExitCode::from(0),
     }
 }
 

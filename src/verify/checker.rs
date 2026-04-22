@@ -39,8 +39,6 @@ impl From<std::io::Error> for VerifyError {
 pub struct DratVerifier {
     /// Active clauses (original + learned - deleted)
     clauses: Vec<Option<Vec<Literal>>>,
-    /// Number of variables
-    num_vars: u32,
     /// Current assignments during unit propagation
     assignments: Vec<Option<bool>>,
     /// Propagation queue
@@ -72,7 +70,6 @@ impl DratVerifier {
 
         DratVerifier {
             clauses,
-            num_vars,
             assignments: vec![None; (num_vars + 1) as usize],
             propagation_queue: Vec::new(),
             stats: VerifyStats::default(),
@@ -83,19 +80,19 @@ impl DratVerifier {
     pub fn from_cnf_file<P: AsRef<Path>>(path: P) -> Result<Self, VerifyError> {
         let file = File::open(path)?;
         let reader = BufReader::new(file);
-        
+
         let mut num_vars: u32 = 0;
         let mut clauses: Vec<Option<Vec<Literal>>> = Vec::new();
 
         for line in reader.lines() {
             let line = line?;
             let line = line.trim();
-            
+
             // Skip comments and empty lines
             if line.is_empty() || line.starts_with('c') {
                 continue;
             }
-            
+
             // Parse header
             if line.starts_with('p') {
                 let parts: Vec<&str> = line.split_whitespace().collect();
@@ -104,7 +101,7 @@ impl DratVerifier {
                 }
                 continue;
             }
-            
+
             // Parse clause
             let lits: Vec<Literal> = line
                 .split_whitespace()
@@ -112,7 +109,7 @@ impl DratVerifier {
                 .take_while(|&n| n != 0)
                 .map(|n| Literal::from_dimacs(n))
                 .collect();
-            
+
             if !lits.is_empty() {
                 clauses.push(Some(lits));
             }
@@ -120,7 +117,6 @@ impl DratVerifier {
 
         Ok(DratVerifier {
             clauses,
-            num_vars,
             assignments: vec![None; (num_vars + 1) as usize],
             propagation_queue: Vec::new(),
             stats: VerifyStats::default(),

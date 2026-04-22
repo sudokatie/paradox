@@ -120,7 +120,6 @@ pub fn init_watches(watches: &mut WatchLists, clauses: &[crate::clause::Clause])
 mod tests {
     use super::*;
     use crate::clause::Clause;
-    use crate::literal::Variable;
 
     fn lit(i: i32) -> Literal {
         Literal::from_dimacs(i)

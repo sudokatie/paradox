@@ -16,6 +16,9 @@ pub use reduce::{ClauseReducer, ReductionConfig, compact_clauses};
 pub use restart::{RestartScheduler, RestartStrategy, luby_value};
 pub use vsids::Vsids;
 
+use std::sync::atomic::{AtomicBool, Ordering};
+use std::sync::Arc;
+
 use crate::assignment::{Assignments, Value};
 use crate::clause::ClauseRef;
 use crate::formula::Formula;
@@ -32,6 +35,8 @@ pub enum SolveResult {
     Unsat,
     /// Unknown (timeout or resource limit)
     Unknown,
+    /// Solver was cancelled (e.g., timeout)
+    Timeout,
 }
 
 /// Statistics about the solving process
@@ -213,6 +218,11 @@ impl Solver {
 
     /// Main CDCL solve loop
     pub fn solve(&mut self) -> SolveResult {
+        self.solve_with_cancel(None)
+    }
+
+    /// Main CDCL solve loop with optional cancel flag
+    pub fn solve_with_cancel(&mut self, cancel: Option<Arc<AtomicBool>>) -> SolveResult {
         // Check for trivial UNSAT (empty clause in original formula)
         if self.formula.has_empty_clause() {
             return SolveResult::Unsat;
@@ -227,7 +237,7 @@ impl Solver {
         for (clause_ref, clause) in self.formula.unit_clauses().collect::<Vec<_>>() {
             let lit = clause[0];
             let var = lit.variable();
-            
+
             // Check if already assigned
             match self.assignments.value(var) {
                 Value::Unassigned => {
@@ -243,24 +253,31 @@ impl Solver {
 
         // Initialize restart scheduler
         let mut restart_scheduler = RestartScheduler::new(RestartStrategy::default());
-        
+
         // Track first learned clause index for reduction
         let first_learned = self.formula.num_clauses();
         let mut reducer = ClauseReducer::new(ReductionConfig::default());
 
         loop {
+            // Check cancel flag at the start of each iteration
+            if let Some(ref flag) = cancel {
+                if flag.load(Ordering::Relaxed) {
+                    return SolveResult::Timeout;
+                }
+            }
+
             // Propagate
             if let Some(conflict_clause) = self.propagate() {
                 // Conflict!
                 self.stats.conflicts += 1;
-                
+
                 let current_level = self.trail.current_level();
-                
+
                 // Conflict at level 0 means UNSAT
                 if current_level == 0 {
                     return SolveResult::Unsat;
                 }
-                
+
                 // Analyze conflict
                 let analysis = analyze_conflict(
                     &self.formula,
@@ -269,31 +286,31 @@ impl Solver {
                     conflict_clause,
                     current_level,
                 );
-                
+
                 match analysis {
                     None => return SolveResult::Unsat,
                     Some(result) => {
                         // Bump VSIDS activities
                         bump_conflict_vars(&mut self.vsids, &result.involved_vars);
-                        
+
                         // Backtrack
                         self.backtrack(result.backtrack_level);
-                        
+
                         // Add learned clause
                         let lbd = result.lbd;
-                        
+
                         // Log to DRAT proof before adding
                         if let Some(ref mut writer) = self.proof_writer {
                             let _ = writer.add_clause(&result.learned_clause);
                         }
-                        
+
                         let clause_ref = add_learned_clause(
                             &mut self.formula,
                             &mut self.watches,
                             result.learned_clause,
                         );
                         self.stats.learned_clauses += 1;
-                        
+
                         // The asserting literal should now be unit
                         // Push it to trail for propagation
                         let asserting = self.formula.clause(clause_ref)[0];
@@ -301,17 +318,17 @@ impl Solver {
                         let val = asserting.is_positive();
                         self.assignments.assign(var, val, self.trail.current_level(), Some(clause_ref));
                         self.trail.push(asserting);
-                        
+
                         // Record conflict for restart scheduler
                         restart_scheduler.record_conflict(Some(lbd));
-                        
+
                         // Check for restart
                         if restart_scheduler.should_restart() {
                             self.backtrack(0);
                             restart_scheduler.restart();
                             self.stats.restarts += 1;
                         }
-                        
+
                         // Check for clause reduction
                         let learned_count = self.formula.num_clauses() - first_learned;
                         if reducer.should_reduce(learned_count) {
@@ -319,7 +336,7 @@ impl Solver {
                                 self.formula.clauses(),
                                 first_learned,
                             );
-                            
+
                             // Log deleted clauses to DRAT proof
                             if let Some(ref mut writer) = self.proof_writer {
                                 let keep_set: std::collections::HashSet<_> = keep.iter().collect();
@@ -329,7 +346,7 @@ impl Solver {
                                     }
                                 }
                             }
-                            
+
                             compact_clauses(&mut self.formula, &mut self.watches, &keep);
                         }
                     }
@@ -340,7 +357,7 @@ impl Solver {
                     // SAT!
                     return SolveResult::Sat(self.model());
                 }
-                
+
                 // Make a decision
                 if !self.decide() {
                     // No more decisions possible but not all assigned?
